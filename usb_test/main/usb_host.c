@@ -13,7 +13,8 @@
 
 /*******************************
 *    warning!!!: any copy of this code or his part must include this: 
-*  "The original was written by Dima Haifa Samsonov @ Israel sdima1357@gmail.com on 3/2021" *
+*  "The original was written by Dima Samsonov @ Israel sdima1357@gmail.com on 3/2021" *
+*  Copyright (C) 2021  Dmitry Samsonov *
 ********************************/
 
 #include "usb_host.h"
