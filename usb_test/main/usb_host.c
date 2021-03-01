@@ -48,7 +48,7 @@
 #define DEF_BUFF_SIZE 0x100
 
 // somethins short  like ACK 
-#define SMALL_NO_DATA 40
+#define SMALL_NO_DATA 36
 
 
 ///cpufreq (must be 240) /8 count = 30MHz  convinient number for measure 1.5MHz  of  low speed USB
@@ -129,7 +129,7 @@ enum    DeviceState 	{ NOT_ATTACHED,ATTACHED,POWERED,DEFAULT,ADDRESS,
 					PARSE_CONFIG,PARSE_CONFIG1,PARSE_CONFIG2,PARSE_CONFIG3,
 					POST_ATTACHED,RESET_COMPLETE,POWERED_COMPLETE,DEFAULT_COMPL} ;
 
-enum  CallbackCmd {CB_CHECK,CB_RESET,CB_WAIT0,CB_POWER,CB_TICK,CB_2,CB_3,CB_4,CB_5,CB_6,CB_7,CB_8,CB_9,CB_WAIT1} ;
+enum  CallbackCmd {CB_CHECK,CB_RESET,CB_WAIT0,CB_POWER,CB_TICK,CB_2,CB_2ack,CB_3,CB_4,CB_5,CB_6,CB_7,CB_8,CB_9,CB_WAIT1} ;
 
 //Req rq;
 static int BLINK = -1;
@@ -137,6 +137,7 @@ typedef struct
 {
 int 			isValid;	
 int 			selfNum;
+int                    epCount;	
 int 			cnt;
 uint32_t 		DP;
 uint32_t 		DM;
@@ -524,13 +525,18 @@ void sendOnly()
 	restart();
 	SET_I;
 }
-
+//#define TEST
 void sendRecieveNParse()
 {
 	uint8_t locRec = 0;
-	uint16_t val   = 0xff;//DM_GPIO_Port->IDR&(0x3*DP_Pin);
-	uint16_t nval  = 0xff;
-	int act = 48;
+	uint32_t val   = 0xff;//DM_GPIO_Port->IDR&(0x3*DP_Pin);
+	uint32_t nval  = 0xff;
+#ifdef TEST
+#define TOUT  1000
+#else
+#define TOUT  48
+#endif	
+	int32_t act = TOUT;
 //	portDISABLE_INTERRUPTS();
 	sendOnly();
 	while(act>0 && (val||nval) )
@@ -538,10 +544,16 @@ void sendRecieveNParse()
 		val  = nval;
 		nval = READ_BOTH_PINS;
 		received_NRZI_buffer[locRec] = _getCycleCount8d8() |  nval;
-		
-		int flag =  val!=nval;
-		locRec  +=  flag;
-		act 	 = (flag)?48:(act-1);
+		if(val!=nval)
+		{
+			locRec++;
+			act = TOUT;
+		}
+		else act--;
+
+		//~ int flag =  val!=nval;
+		//~ locRec  +=  flag;
+		//~ act 	 = (flag)?TOUT:(act-1);
 	}
 //	portENABLE_INTERRUPTS();
 	received_NRZI_buffer_bytesCnt = locRec;
@@ -696,11 +708,17 @@ void timerCallBack()
 	}
 	else if (current->cb_Cmd==CB_POWER)
 	{
+#ifdef TEST
+		SOF();
+		sendRecieve();
+		SOF();
+#else
 		SET_O;
 		SE_J;
 		SET_I;
 		current->cmdTimeOut  = 	 2;
 		current->cb_Cmd  = CB_WAIT1;
+#endif		
 	}
 	else if (current->cb_Cmd==CB_TICK)
 	{
@@ -912,7 +930,7 @@ void timerCallBack()
 		pu_Addr(T_IN,current->rq.addr,current->rq.eop);
 				//setup
 	        sendRecieveNParse();
-                if(received_NRZI_buffer_bytesCnt<SMALL_NO_DATA)
+                if(received_NRZI_buffer_bytesCnt<SMALL_NO_DATA/2)
                 {
                 	// no data , seems NAK or something like this
 			current->cb_Cmd = CB_TICK;
@@ -920,9 +938,9 @@ void timerCallBack()
 					//printf("received_NRZI_buffer_bytesCnt = %d\n",prec);
                 	return ;
                 }
-                //ACK();
+                ACK();
 		int res = parse_received_NRZI_buffer();
-		if(res == T_NEED_ACK)
+		//if(res == T_NEED_ACK)
 		{
 			if(decoded_receive_buffer_size()>2)
 			{
@@ -936,27 +954,18 @@ void timerCallBack()
 					current->asckedReceiveBytes--;
 				}
 			}
-			SOF();
-			pu_Addr(T_IN,current->rq.addr,current->rq.eop);
-					//setup
-	        	sendRecieveNParse();
-	                if(received_NRZI_buffer_bytesCnt<SMALL_NO_DATA)
-	                {
-	                	// no data , seems NAK or something like this
-				current->cb_Cmd = CB_TICK;
-	                	current->bComplete = 1;
-	                	return ;
-	                }
-	                ACK();
-	               	current->bComplete = 1;
+			///??? enought?
+			//current->asckedReceiveBytes = 0; 
+			//current->cb_Cmd = CB_2ack;
+			//return ;
 		}
-		else
+		//else
 		{
-			current->numb_reps_errors_allowed--;
-			if(current->numb_reps_errors_allowed>0)
-			{
-				return ;
-			}
+		//	current->numb_reps_errors_allowed--;
+		//	if(current->numb_reps_errors_allowed>0)
+		//	{
+		//		return ;
+		//	}
 		}
 #if 0
 	    		SOF();
@@ -1046,7 +1055,7 @@ void fsm_Mashine()
 	
 	 if(current->fsm_state == 0)
 	 {
-		current->cb_Cmd      = CB_CHECK;
+		current->cb_Cmd     = CB_CHECK;
 		current->fsm_state   = 1;
 	 }
 	 if(current->fsm_state == 1)
@@ -1054,7 +1063,7 @@ void fsm_Mashine()
 		if(current->wires_last_state==M_ONE)
 		// if(1)
 		{
-			current->cmdTimeOut = 100+current->selfNum*43;
+			current->cmdTimeOut = 100+current->selfNum*73;
 			//current->cmdTimeOut = 100;
 			current->cb_Cmd      = CB_WAIT0;
 			current->fsm_state   = 2;
@@ -1073,8 +1082,11 @@ void fsm_Mashine()
 	 else if(current->fsm_state==3)
 	 {
 		current->cb_Cmd       = CB_POWER;
+#ifdef TEST
+		current->fsm_state    =  3;
+#else
 		current->fsm_state    =  4;
-		 
+#endif
 	 }
 	 else if(current->fsm_state==4)
 	 {
@@ -1176,7 +1188,7 @@ void fsm_Mashine()
 	 }
 	 else if(current->fsm_state==101)
 	 {
-		 if(current->acc_decoded_resp_counter>=4)
+		 if(current->acc_decoded_resp_counter>=1)
 		 {
 			current->ufPrintDesc |= 8;
 			current->R0Bytes= current->acc_decoded_resp_counter;
@@ -1188,18 +1200,27 @@ void fsm_Mashine()
 			}
 			//gpio_set_level(B23_GPIO, 1);
 		 }
-		RequestIn(T_IN,	ASSIGNED_USB_ADDRESS,2,8);
-		current->fsm_state    = 102; 
+		 if(current->epCount>=2)
+		 {
+			RequestIn(T_IN,	ASSIGNED_USB_ADDRESS,2,8);
+			current->fsm_state    = 102; 
+		 }
+		 else
+		 {
+			current->cmdTimeOut = 5; 
+			current->cb_Cmd        = CB_WAIT1;
+			current->fsm_state      = 104; 
+		 }
 	 }
 	 else if(current->fsm_state==102)
 	 {
-		 if(current->acc_decoded_resp_counter>=4)
+		 if(current->acc_decoded_resp_counter>=1)
 		 {
 			current->ufPrintDesc |= 16;
 			current->R1Bytes= current->acc_decoded_resp_counter;
 			memcpy(current->Resp1,current->acc_decoded_resp,current->R0Bytes);	 
 		 }
-		current->cmdTimeOut = 8; 
+		current->cmdTimeOut = 4; 
 		current->cb_Cmd        = CB_WAIT1;
 		current->fsm_state      = 104; 
 	 }
@@ -1218,7 +1239,7 @@ void fsm_Mashine()
 			current->fsm_state      = 0; 
 			return ;
 		}
-		current->fsm_state      = 99; 
+		current->fsm_state      = 100; 
 	 }
 	 else
 	 {
@@ -1321,6 +1342,7 @@ void initStates(int blink_Pin,int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,in
 			current->wires_last_state = 0;
 			current->counterNAck = 0;
 			current->counterAck = 0;
+			current->epCount = 0;
 			gpio_pad_select_gpio(current->DP);
 			gpio_set_direction(current->DP, GPIO_MODE_INPUT);
 			gpio_pulldown_en(current->DP);
@@ -1445,6 +1467,7 @@ static int cntl = 0;
 			#define STDCLASS        0x00
 			#define HIDCLASS        0x03
 			#define HUBCLASS	 	0x09      /* bDeviceClass, bInterfaceClass */
+			current->epCount     = 0;
 				while(pos<pcurrent->descrBufferLen-2)
 				{
 					uint8_t len  =  pcurrent->descrBuffer[pos];
@@ -1503,6 +1526,7 @@ static int cntl = 0;
 							}
 							else if (type == 0x5)
 							{
+								current->epCount++;
 								sEPDesc epd;
 								memcpy(&epd,&pcurrent->descrBuffer[pos],len);
 								//printf("epd.bLength       = %02x\n",epd.bLength);
