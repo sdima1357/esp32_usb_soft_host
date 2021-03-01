@@ -57,7 +57,7 @@ void timer_task(void *pvParameter)
     }; // default clock source is APB
     
     
-    initStates(BLINK_GPIO,DP_P,DM_P,DP_P1,DM_P1,-1,-1,-1,-1);
+    initStates(BLINK_GPIO,DP_P,DM_P,DP_P1,DM_P1,18,19,-1,-1);
   //  initStates(BLINK_GPIO,DP_P,DM_P,-1,-1,-1,-1,-1,-1);
 
     int timer_idx = TIMER_0;

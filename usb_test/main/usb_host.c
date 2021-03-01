@@ -1406,13 +1406,13 @@ static int cntl = 0;
 		if(pcurrent->ufPrintDesc&1)
 		{
 			pcurrent->ufPrintDesc &= ~(uint32_t)1;
-			printf("desc.bcdUSB          = %02x\n",pcurrent->desc.bcdUSB);
-			printf("desc.bDeviceClass    = %02x\n",pcurrent->desc.bDeviceClass);
-			printf("desc.bDeviceSubClass = %02x\n",pcurrent->desc.bDeviceSubClass);
-			printf("desc.bDeviceProtocol = %02x\n",pcurrent->desc.bDeviceProtocol);
-			printf("desc.bMaxPacketSize0 = %02x\n",pcurrent->desc.bMaxPacketSize0);
-			printf("desc.idVendor        = %02x\n",pcurrent->desc.idVendor);
-			printf("desc.idProduct       = %02x\n",pcurrent->desc.idProduct);
+			//~ printf("desc.bcdUSB          = %02x\n",pcurrent->desc.bcdUSB);
+			//~ printf("desc.bDeviceClass    = %02x\n",pcurrent->desc.bDeviceClass);
+			//~ printf("desc.bDeviceSubClass = %02x\n",pcurrent->desc.bDeviceSubClass);
+			//~ printf("desc.bDeviceProtocol = %02x\n",pcurrent->desc.bDeviceProtocol);
+			//~ printf("desc.bMaxPacketSize0 = %02x\n",pcurrent->desc.bMaxPacketSize0);
+			//~ printf("desc.idVendor        = %02x\n",pcurrent->desc.idVendor);
+			//~ printf("desc.idProduct       = %02x\n",pcurrent->desc.idProduct);
 			printf("desc.bcdDevice       = %02x\n",pcurrent->desc.bcdDevice);
 			printf("desc.iManufacturer   = %02x\n",pcurrent->desc.iManufacturer);
 			printf("desc.iProduct        = %02x\n",pcurrent->desc.iProduct);
@@ -1486,12 +1486,13 @@ static int cntl = 0;
 								memcpy(&cfg,&pcurrent->descrBuffer[pos],len);
 								//printf("cfg.bLength         = %02x\n",cfg.bLength);
 								//printf("cfg.bType           = %02x\n",cfg.bType);
-								printf("cfg.wLength         = %02x\n",cfg.wLength);
-								printf("cfg.bNumIntf        = %02x\n",cfg.bNumIntf);
-								printf("cfg.bCV             = %02x\n",cfg.bCV);
-								printf("cfg.bIndex          = %02x\n",cfg.bIndex);
-								printf("cfg.bAttr           = %02x\n",cfg.bAttr);
-								printf("cfg.bMaxPower       = %d\n",cfg.bMaxPower);
+								
+								//~ printf("cfg.wLength         = %02x\n",cfg.wLength);
+								//~ printf("cfg.bNumIntf        = %02x\n",cfg.bNumIntf);
+								//~ printf("cfg.bCV             = %02x\n",cfg.bCV);
+								//~ printf("cfg.bIndex          = %02x\n",cfg.bIndex);
+								//~ printf("cfg.bAttr           = %02x\n",cfg.bAttr);
+								//~ printf("cfg.bMaxPower       = %d\n",cfg.bMaxPower);
 
 							}
 							else if (type == 0x4)
@@ -1500,13 +1501,13 @@ static int cntl = 0;
 								memcpy(&sIntf,&pcurrent->descrBuffer[pos],len);
 								//printf("sIntf.bLength      = %02x\n",sIntf.bLength);
 								//printf("sIntf.bType        = %02x\n",sIntf.bType);
-								printf("sIntf.iNum         = %02x\n",sIntf.iNum);
-								printf("sIntf.iAltString   = %02x\n",sIntf.iAltString);
-								printf("sIntf.bEndPoints   = %02x\n",sIntf.bEndPoints);
-								printf("sIntf.iClass       = %02x\n",sIntf.iClass);
-								printf("sIntf.iSub         = %02x\n",sIntf.iSub);
-								printf("sIntf.iProto       = %d\n",sIntf.iProto);
-								printf("sIntf.iIndex       = %d\n",sIntf.iIndex);
+								//~ printf("sIntf.iNum         = %02x\n",sIntf.iNum);
+								//~ printf("sIntf.iAltString   = %02x\n",sIntf.iAltString);
+								//~ printf("sIntf.bEndPoints   = %02x\n",sIntf.bEndPoints);
+								//~ printf("sIntf.iClass       = %02x\n",sIntf.iClass);
+								//~ printf("sIntf.iSub         = %02x\n",sIntf.iSub);
+								//~ printf("sIntf.iProto       = %d\n",sIntf.iProto);
+								//~ printf("sIntf.iIndex       = %d\n",sIntf.iIndex);
 
 							}
 							else if (type == 0x21)
@@ -1517,12 +1518,12 @@ static int cntl = 0;
 								memcpy(&hid[i],&pcurrent->descrBuffer[pos],len);
 								//printf("hid.bLength          = %02x\n",hid[i].bLength);
 								//printf("hid.bDescriptorType  = %02x\n",hid[i].bDescriptorType);
-								printf("hid.bcdHID           = %02x\n",hid[i].bcdHID);
-								printf("hid.bCountryCode     = %02x\n",hid[i].bCountryCode);
-								printf("hid.bNumDescriptors  = %02x\n",hid[i].bNumDescriptors);
-								printf("hid.bReportDescriptorType = %02x\n",hid[i].bReportDescriptorType);
-								printf("hid.wItemLengthH         = %02x\n",hid[i].wItemLengthH);
-								printf("hid.wItemLengthL         = %02x\n",hid[i].wItemLengthL);
+								//~ printf("hid.bcdHID           = %02x\n",hid[i].bcdHID);
+								//~ printf("hid.bCountryCode     = %02x\n",hid[i].bCountryCode);
+								//~ printf("hid.bNumDescriptors  = %02x\n",hid[i].bNumDescriptors);
+								//~ printf("hid.bReportDescriptorType = %02x\n",hid[i].bReportDescriptorType);
+								//~ printf("hid.wItemLengthH         = %02x\n",hid[i].wItemLengthH);
+								//~ printf("hid.wItemLengthL         = %02x\n",hid[i].wItemLengthL);
 							}
 							else if (type == 0x5)
 							{
