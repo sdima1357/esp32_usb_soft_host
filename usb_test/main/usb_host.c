@@ -700,7 +700,6 @@ void timerCallBack()
 		}
 		else
 		{
-			sendRecieveNParse();
 			SET_I;
 			current->wires_last_state = READ_BOTH_PINS>>8;
 			current->bComplete     = 1;
@@ -1200,17 +1199,19 @@ void fsm_Mashine()
 			}
 			//gpio_set_level(B23_GPIO, 1);
 		 }
-		 if(current->epCount>=2)
-		 {
-			RequestIn(T_IN,	ASSIGNED_USB_ADDRESS,2,8);
-			current->fsm_state    = 102; 
-		 }
-		 else
-		 {
-			current->cmdTimeOut = 5; 
-			current->cb_Cmd        = CB_WAIT1;
-			current->fsm_state      = 104; 
-		 }
+			//~ RequestIn(T_IN,	ASSIGNED_USB_ADDRESS,2,8);
+			//~ current->fsm_state    = 102; 
+			if(current->epCount>=2)
+			  {
+				RequestIn(T_IN,	ASSIGNED_USB_ADDRESS,2,8);
+				current->fsm_state    = 102; 
+			 }
+			 else
+			 {
+				current->cmdTimeOut = 3; 
+				current->cb_Cmd        = CB_WAIT1;
+				current->fsm_state      = 104; 
+			 }
 	 }
 	 else if(current->fsm_state==102)
 	 {
@@ -1220,13 +1221,13 @@ void fsm_Mashine()
 			current->R1Bytes= current->acc_decoded_resp_counter;
 			memcpy(current->Resp1,current->acc_decoded_resp,current->R0Bytes);	 
 		 }
-		current->cmdTimeOut = 4; 
+		current->cmdTimeOut = 2; 
 		current->cb_Cmd        = CB_WAIT1;
 		current->fsm_state      = 104; 
 	 }
 	 else if (current->fsm_state==104)
 	 {
-		current->cmdTimeOut = 2; 
+		current->cmdTimeOut = 4; 
 		current->cb_Cmd        = CB_WAIT1;
 #ifdef  DEBUG_REPEAT		 
  static int rcnt =0;
@@ -1382,7 +1383,7 @@ static int cntl = 0;
 		if(!pcurrent->isValid) return ;
 		if((cntl%200)<NUM_USB)
 		{
-			printf("USB%d: Ack = %d Nack = %d %02x pcurrent->cb_Cmd = %d  state = %d ",cntl%NUM_USB,pcurrent->counterAck,pcurrent->counterNAck,pcurrent->wires_last_state,pcurrent->cb_Cmd,pcurrent->fsm_state);
+			printf("USB%d: Ack = %d Nack = %d %02x pcurrent->cb_Cmd = %d  state = %d epCount = %d",cntl%NUM_USB,pcurrent->counterAck,pcurrent->counterNAck,pcurrent->wires_last_state,pcurrent->cb_Cmd,pcurrent->fsm_state,pcurrent->epCount);
 #ifdef DEBUG_ALL
 			for(int k=0;k<20;k++)
 			{
@@ -1467,7 +1468,8 @@ static int cntl = 0;
 			#define STDCLASS        0x00
 			#define HIDCLASS        0x03
 			#define HUBCLASS	 	0x09      /* bDeviceClass, bInterfaceClass */
-			current->epCount     = 0;
+			printf("clear epCount %d self = %d\n",pcurrent->epCount,pcurrent->selfNum);
+			pcurrent->epCount     = 0;
 				while(pos<pcurrent->descrBufferLen-2)
 				{
 					uint8_t len  =  pcurrent->descrBuffer[pos];
@@ -1527,7 +1529,8 @@ static int cntl = 0;
 							}
 							else if (type == 0x5)
 							{
-								current->epCount++;
+								pcurrent->epCount++;
+								printf("pcurrent->epCount = %d\n",pcurrent->epCount);
 								sEPDesc epd;
 								memcpy(&epd,&pcurrent->descrBuffer[pos],len);
 								//printf("epd.bLength       = %02x\n",epd.bLength);
