@@ -20,8 +20,10 @@
 void printState();
 void usb_process();
 
+void led(int on_off);
+
 #define  NUM_USB 4
-void initStates(int BlinkActivityPin , int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3);
+void initStates( int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3);
 
 typedef __packed struct
 {

@@ -45,6 +45,10 @@ void IRAM_ATTR timer_group0_isr(void *para)
 
 #define DP_P1  22
 #define DM_P1  23
+void led(int on_fff)
+{
+			gpio_set_level(BLINK_GPIO, on_fff);
+}
 
 void timer_task(void *pvParameter)
 {
@@ -57,8 +61,11 @@ void timer_task(void *pvParameter)
     }; // default clock source is APB
     
     
-    initStates(BLINK_GPIO,DP_P,DM_P,DP_P1,DM_P1,18,19,-1,-1);
-  //  initStates(BLINK_GPIO,DP_P,DM_P,-1,-1,-1,-1,-1,-1);
+    initStates(DP_P,DM_P,DP_P1,DM_P1,18,19,-1,-1);
+  //  initStates(DP_P,DM_P,-1,-1,-1,-1,-1,-1);
+    gpio_pad_select_gpio(BLINK_GPIO);
+    gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
+
 
     int timer_idx = TIMER_0;
     double timer_interval_sec = TIMER_INTERVAL0_SEC;

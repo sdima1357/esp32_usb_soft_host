@@ -132,7 +132,6 @@ enum    DeviceState 	{ NOT_ATTACHED,ATTACHED,POWERED,DEFAULT,ADDRESS,
 enum  CallbackCmd {CB_CHECK,CB_RESET,CB_WAIT0,CB_POWER,CB_TICK,CB_2,CB_2Ack,CB_3,CB_4,CB_5,CB_6,CB_7,CB_8,CB_9,CB_WAIT1} ;
 
 //Req rq;
-static int BLINK = -1;
 typedef struct
 {
 int 			isValid;	
@@ -706,7 +705,7 @@ void timerCallBack()
 		}
 		else
 		{
-			SET_I;
+			sendRecieveNParse();
 			current->wires_last_state = READ_BOTH_PINS>>8;
 			current->bComplete     = 1;
 		}
@@ -1172,13 +1171,13 @@ void fsm_Mashine()
 	 } 
 	 else if(current->fsm_state==97)
 	 {
-		// config interfaces??
-		//printf("set configuration 1\n");
+		//printf("set (choose) configuration 1\n");
 		Request(T_SETUP,ASSIGNED_USB_ADDRESS,0b0000,T_DATA0,0x00,0x9,0x0001,0x0000,0x0000,0x0000);
 		 current->fsm_state    = 98; 
 	 }
 	 else if(current->fsm_state==98)
 	 {
+		// config interfaces??
 		Request(T_SETUP,ASSIGNED_USB_ADDRESS,0b0000,T_DATA0,0x21,0xa,0x0000,0x0000,0x0000,0x0000);
 		current->fsm_state    = 99; 
 	 }
@@ -1187,6 +1186,7 @@ void fsm_Mashine()
 		uint8_t cmd0 = current->cnt&0x20?0x7:0x0;
 		current->cnt++;
 		uint8_t cmd1 = current->cnt&0x20?0x7:0x0;
+		 //printf(" 3 LEDs enable/disable on keyboard \n");
 		if(cmd0!=cmd1)
 		{
 			RequestSend(T_SETUP,ASSIGNED_USB_ADDRESS,0b0000,T_DATA0,0x21,0x9,0x0200,0x0000,0x0001,0x0001,&cmd1);
@@ -1200,11 +1200,7 @@ void fsm_Mashine()
 	 }
 	 else if(current->fsm_state==100)
 	 {
-		 if(BLINK>-1)
-		 {
-			gpio_set_level(BLINK, 0);
-		 }
-		//gpio_set_level(B23_GPIO, 0);
+		 led(0);
 		RequestIn(T_IN,	ASSIGNED_USB_ADDRESS,1,8);
 		current->fsm_state    = 101; 
 	 }
@@ -1216,10 +1212,7 @@ void fsm_Mashine()
 			current->R0Bytes= current->acc_decoded_resp_counter;
 			memcpy(current->Resp0,current->acc_decoded_resp,current->R0Bytes);	 
 			
-			if(BLINK>-1)
-			{
-				gpio_set_level(BLINK, 1);
-			}
+			led(1);
 			//gpio_set_level(B23_GPIO, 1);
 		 }
 			//~ RequestIn(T_IN,	ASSIGNED_USB_ADDRESS,2,8);
@@ -1317,17 +1310,11 @@ int checkPins(int dp,int dm)
 	//p
 	return 1;
 }
-void initStates(int blink_Pin,int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3)
+void initStates(int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3)
 {
 	decoded_receive_buffer_head = 0;
 	decoded_receive_buffer_tail = 0;
 	transmit_bits_buffer_store_cnt = 0;
-	if(blink_Pin!=-1)
-	{	
-		BLINK = blink_Pin;
-		gpio_pad_select_gpio(blink_Pin);
-		gpio_set_direction(blink_Pin, GPIO_MODE_OUTPUT);
-	}
 	
 	for(int k=0;k<NUM_USB;k++)
 	{
