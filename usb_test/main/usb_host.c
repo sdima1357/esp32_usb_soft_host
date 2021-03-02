@@ -1183,19 +1183,20 @@ void fsm_Mashine()
 	 }
 	 else if(current->fsm_state==99)
 	 {
-		uint8_t cmd0 = current->cnt&0x20?0x7:0x0;
-		current->cnt++;
-		uint8_t cmd1 = current->cnt&0x20?0x7:0x0;
+		//uint8_t cmd0 = current->cnt&0x20?0x7:0x0;
+		//current->cnt++;
+		//uint8_t cmd1 = current->cnt&0x20?0x7:0x0;
 		 //printf(" 3 LEDs enable/disable on keyboard \n");
-		if(cmd0!=cmd1)
-		{
+		uint8_t cmd1 = 0;
+		//if(cmd0!=cmd1)
+		//{
 			RequestSend(T_SETUP,ASSIGNED_USB_ADDRESS,0b0000,T_DATA0,0x21,0x9,0x0200,0x0000,0x0001,0x0001,&cmd1);
-		}
-		else
-		{
-			current->cmdTimeOut = 1; 
-			current->cb_Cmd        = CB_WAIT1;
-		}
+		//}
+		//else
+		//{
+		//	current->cmdTimeOut = 1; 
+		//	current->cb_Cmd        = CB_WAIT1;
+		//}
 		current->fsm_state    = 100; 
 	 }
 	 else if(current->fsm_state==100)
