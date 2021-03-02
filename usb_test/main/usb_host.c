@@ -129,7 +129,7 @@ enum    DeviceState 	{ NOT_ATTACHED,ATTACHED,POWERED,DEFAULT,ADDRESS,
 					PARSE_CONFIG,PARSE_CONFIG1,PARSE_CONFIG2,PARSE_CONFIG3,
 					POST_ATTACHED,RESET_COMPLETE,POWERED_COMPLETE,DEFAULT_COMPL} ;
 
-enum  CallbackCmd {CB_CHECK,CB_RESET,CB_WAIT0,CB_POWER,CB_TICK,CB_2,CB_2ack,CB_3,CB_4,CB_5,CB_6,CB_7,CB_8,CB_9,CB_WAIT1} ;
+enum  CallbackCmd {CB_CHECK,CB_RESET,CB_WAIT0,CB_POWER,CB_TICK,CB_2,CB_2Ack,CB_3,CB_4,CB_5,CB_6,CB_7,CB_8,CB_9,CB_WAIT1} ;
 
 //Req rq;
 static int BLINK = -1;
@@ -270,10 +270,6 @@ uint32_t cal16()
 	}
 	return (~rem)&0b1111111111111111;
 }
-void reB()
-{
-	 transmit_bits_buffer_store_cnt = 0;
-}
 inline void seB(int bit)
 {
 	transmit_bits_buffer_store[transmit_bits_buffer_store_cnt++] = bit;
@@ -346,6 +342,9 @@ void repack()
 	transmit_NRZI_buffer[transmit_NRZI_buffer_cnt++] = USB_LS_J;
 	transmit_NRZI_buffer[transmit_NRZI_buffer_cnt++] = USB_LS_J;
 	transmit_NRZI_buffer[transmit_NRZI_buffer_cnt++] = USB_LS_J;
+	transmit_NRZI_buffer[transmit_NRZI_buffer_cnt++] = USB_LS_J;
+
+	transmit_bits_buffer_store_cnt = 0;
 
 }
 
@@ -570,7 +569,7 @@ void SOF()
 #if 1
 	if(1)
 	{
-		reB();
+		//reB();
 		repack();
 	}
 	//	else
@@ -591,7 +590,7 @@ void SOF()
 
 void pu_Addr(uint8_t cmd,uint8_t addr,uint8_t eop)
 {
-	reB();
+	//reB();
 	pu_MSB(T_START,8);
 	pu_MSB(cmd,8);//setup
 	pu_LSB(addr,7);
@@ -602,7 +601,7 @@ void pu_Addr(uint8_t cmd,uint8_t addr,uint8_t eop)
 
 void pu_ShortCmd(uint8_t cmd)
 {
-	reB();
+	//reB();
 	pu_MSB(T_START,8);
 	pu_MSB(cmd,8);//setup
 	//pu_MSB(cal16(),16);
@@ -612,7 +611,7 @@ void pu_ShortCmd(uint8_t cmd)
 
 void pu_Cmd(uint8_t cmd,uint8_t bmRequestType, uint8_t bmRequest,uint16_t wValue,uint16_t wIndex,uint16_t wLen)
 {
-	reB();
+	//reB();
 	pu_MSB(T_START,8);
 	pu_MSB(cmd,8);//setup
 	pu_LSB(bmRequestType,8);
@@ -623,20 +622,27 @@ void pu_Cmd(uint8_t cmd,uint8_t bmRequestType, uint8_t bmRequest,uint16_t wValue
 	pu_MSB(cal16(),16);
 	repack();
 }
+
+uint8_t ACK_BUFF[0x100];
+int    ACK_BUFF_CNT = 0;
 void ACK()
 {
-	if(0)
-	{
-		reB();
-		repack();
-	}
+	transmit_NRZI_buffer_cnt =0;
+	if(ACK_BUFF_CNT==0)
 	{
 		//reB();
 		//repack();
-		reB();
+		//reB();
 		pu_MSB(T_START,8);
 		pu_MSB(T_ACK,8);// ack
 		repack();
+		memcpy(ACK_BUFF,transmit_NRZI_buffer,transmit_NRZI_buffer_cnt);
+		ACK_BUFF_CNT = transmit_NRZI_buffer_cnt;
+	}
+	else
+	{
+		memcpy(transmit_NRZI_buffer,ACK_BUFF,ACK_BUFF_CNT);
+		transmit_NRZI_buffer_cnt = ACK_BUFF_CNT;
 	}
 	sendOnly();
 }
@@ -707,6 +713,8 @@ void timerCallBack()
 	}
 	else if (current->cb_Cmd==CB_POWER)
 	{
+
+		// for TEST
 #ifdef TEST
 		SOF();
 		sendRecieve();
@@ -754,7 +762,7 @@ void timerCallBack()
 	{
 		 SOF();
 		 pu_Addr(T_OUT,current->rq.addr,current->rq.eop);
-		 reB();
+		 //reB();
 		 pu_MSB(T_START,8);
 		 pu_MSB(T_DATA1,8);//setup
 		 for(int k=0;k<current->transmitL1Bytes;k++)
@@ -923,6 +931,25 @@ void timerCallBack()
 		current->cb_Cmd = CB_TICK;
 		current->bComplete = 1;
 	}
+	else if(current->cb_Cmd==CB_2Ack)
+	{
+		SOF();
+		pu_Addr(T_IN,current->rq.addr,current->rq.eop);
+				//setup
+	    sendRecieveNParse();
+        if(received_NRZI_buffer_bytesCnt<SMALL_NO_DATA/2)
+        {
+                	// no data , seems NAK or something like this
+			current->cb_Cmd = CB_TICK;
+                	current->bComplete = 1;
+					//printf("received_NRZI_buffer_bytesCnt = %d\n",prec);
+            return ;
+         }
+                //ACK();
+         ACK();
+		current->cb_Cmd = CB_TICK;
+		current->bComplete = 1;
+	}
 	else if(current->cb_Cmd==CB_2)
 	{
 		SOF();
@@ -937,9 +964,10 @@ void timerCallBack()
 					//printf("received_NRZI_buffer_bytesCnt = %d\n",prec);
                 	return ;
                 }
-                ACK();
+                //ACK();
+                //ACK();
 		int res = parse_received_NRZI_buffer();
-		//if(res == T_NEED_ACK)
+		if(res==T_NEED_ACK)
 		{
 			if(decoded_receive_buffer_size()>2)
 			{
@@ -953,26 +981,23 @@ void timerCallBack()
 					current->asckedReceiveBytes--;
 				}
 			}
-			///??? enought?
-			//current->asckedReceiveBytes = 0; 
-			//current->cb_Cmd = CB_2ack;
-			//return ;
+			current->asckedReceiveBytes = 0;
+			current->cb_Cmd=CB_2Ack;
+			return ;
 		}
-		//else
+		else
 		{
-		//	current->numb_reps_errors_allowed--;
-		//	if(current->numb_reps_errors_allowed>0)
-		//	{
-		//		return ;
-		//	}
+			current->numb_reps_errors_allowed--;
+			if(current->numb_reps_errors_allowed>0)
+			{
+				return ;
 		}
-#if 0
-	    		SOF();
-	    		pu_Addr(T_OUT,current->rq.addr,current->rq.eop);
-	        	pu_ShortCmd(T_DATA1);
-
-				sendRecieveNParse(0);
-#endif
+			else
+			{
+				current->cb_Cmd = CB_TICK;
+				current->bComplete = 1;
+			}
+		}
 		current->cb_Cmd = CB_TICK;
 		current->bComplete = 1;
 		current->asckedReceiveBytes = 0;
@@ -1002,9 +1027,7 @@ void Request(uint8_t cmd,	 uint8_t addr,uint8_t eop,
 //	 {
 		 current->cb_Cmd = CB_5;
 //	 }
-	// current->bComplete   = 0;
 	// HAL_Delay(1);
-	// while(!current->bComplete){};
 }
 
 void RequestSend(uint8_t cmd,	 uint8_t addr,uint8_t eop,
@@ -1270,8 +1293,8 @@ void setPins(int DPPin,int DMPin)
 	if(DIFF>=0)
 	{
 		RD_SHIFT = DIFF;
-		M_ONE = DMPin-MIN_PIN+1;//<<DIFF;
-		P_ONE = DPPin-MIN_PIN+1;//<<DIFF;
+		M_ONE = 1<<(DM_PIN-MIN_PIN);//<<DIFF;
+		P_ONE = 1<<(DP_PIN-MIN_PIN);//<<DIFF;
 	}
 	else
 	{
