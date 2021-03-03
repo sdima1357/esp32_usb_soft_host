@@ -1,5 +1,8 @@
 # esp32_usb_soft_host
 esp32 low speed USB soft host up to 4 HID devices simultaneously
+
+board :https://www.aliexpress.com/premium/LOLIN32.html
+
 //set right esp32 env for me it:
 
 export IDF_PATH=$HOME/esp/esp-idf
