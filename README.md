@@ -2,6 +2,7 @@
 esp32 low speed USB soft host up to 4 HID devices simultaneously
 
 board ~$3 :https://www.aliexpress.com/premium/LOLIN32.html or any of https://www.aliexpress.com/premium/ESP32.html
+
 usb connectors(for example): https://www.aliexpress.com/item/1005002027124387.html
 
 
