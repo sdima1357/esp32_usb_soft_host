@@ -10,7 +10,7 @@ usb connectors(for example): https://www.aliexpress.com/item/1005002027124387.ht
 
 export IDF_PATH=$HOME/esp/esp-idf
 
-source esp-idf/export.sh
+source $HOME/esp/esp-idf/export.sh
 
 
 //connect the board, build & flash
