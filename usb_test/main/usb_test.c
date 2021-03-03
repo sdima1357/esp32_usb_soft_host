@@ -39,12 +39,18 @@ void IRAM_ATTR timer_group0_isr(void *para)
 }
 
 #define BLINK_GPIO CONFIG_BLINK_GPIO
-
 #define DP_P  16
 #define DM_P  17
 
 #define DP_P1  22
 #define DM_P1  23
+
+#define DP_P2  18
+#define DM_P2  19
+
+#define DP_P3  13
+#define DM_P3  15
+
 void led(int on_fff)
 {
 			gpio_set_level(BLINK_GPIO, on_fff);
@@ -60,8 +66,7 @@ void timer_task(void *pvParameter)
         .auto_reload = 1,
     }; // default clock source is APB
     
-    
-    initStates(DP_P,DM_P,DP_P1,DM_P1,18,19,-1,-1);
+    initStates(DP_P,DM_P,DP_P1,DM_P1,DP_P2,DM_P2,DP_P3,DM_P3);
   //  initStates(DP_P,DM_P,-1,-1,-1,-1,-1,-1);
     gpio_pad_select_gpio(BLINK_GPIO);
     gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
