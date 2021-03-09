@@ -1,5 +1,5 @@
 # esp32_usb_soft_host
-esp32 low speed USB soft host up to 4 HID devices simultaneously
+esp32 USB-LS pure software host thru general IO pins. Up to 4 HID devices simultaneously. 
 
 board ~$3 :https://www.aliexpress.com/premium/LOLIN32.html or any of https://www.aliexpress.com/premium/ESP32.html
 
