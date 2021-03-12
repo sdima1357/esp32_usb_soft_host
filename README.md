@@ -23,3 +23,4 @@ cd esp32_usb_soft_host/usb_test/
 
 make flash monitor
 
+![image2](https://github.com/sdima1357/esp32_usb_soft_host/blob/main/images/PulseView.jpg?raw=true)
