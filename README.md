@@ -10,18 +10,18 @@ usb connectors(for example): https://www.aliexpress.com/item/1005002027124387.ht
 
 //set right esp32 env for me it:
 
-export IDF_PATH=$HOME/esp/esp-idf
+>export IDF_PATH=$HOME/esp/esp-idf
 
-source $HOME/esp/esp-idf/export.sh
+>source $HOME/esp/esp-idf/export.sh
 
 
 //connect the board, build & flash
 
-git clone  https://github.com/sdima1357/esp32_usb_soft_host
+>git clone  https://github.com/sdima1357/esp32_usb_soft_host
 
-cd esp32_usb_soft_host/usb_test/
+>cd esp32_usb_soft_host/usb_test/
 
-make flash monitor
+>make flash monitor
 
 
 Test run with 3 mouses, $3 CY7C68013A logic analyser  and amazing program https://sigrok.org/wiki/PulseView :
