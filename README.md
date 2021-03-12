@@ -23,4 +23,6 @@ cd esp32_usb_soft_host/usb_test/
 
 make flash monitor
 
+Works with 3 mouses, $3 CY7C68013A logic analyser  and amazing program https://sigrok.org/wiki/PulseView
+
 ![image2](https://github.com/sdima1357/esp32_usb_soft_host/blob/main/images/PulseView.jpg?raw=true)
