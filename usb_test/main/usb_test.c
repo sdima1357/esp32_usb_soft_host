@@ -39,17 +39,27 @@ void IRAM_ATTR timer_group0_isr(void *para)
 }
 
 #define BLINK_GPIO CONFIG_BLINK_GPIO
-#define DP_P  16
-#define DM_P  17
+#define DP_P  12
+#define DM_P  14
 
-#define DP_P1  22
-#define DM_P1  23
+#define DP_P1  18
+#define DM_P1  19
+#define DP_P2  -1
+#define DM_P2  -1
+#define DP_P3  -1
+#define DM_P3  -1
 
-#define DP_P2  18
-#define DM_P2  19
+//~ #define DP_P  16
+//~ #define DM_P  17
 
-#define DP_P3  13
-#define DM_P3  15
+//~ #define DP_P1  22
+//~ #define DM_P1  23
+
+//~ #define DP_P2  18
+//~ #define DM_P2  19
+
+//~ #define DP_P3  13
+//~ #define DM_P3  15
 
 void led(int on_fff)
 {

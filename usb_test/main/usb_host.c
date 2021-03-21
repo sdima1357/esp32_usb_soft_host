@@ -10,7 +10,9 @@
 #include "sdkconfig.h"
 #include "driver/timer.h"
 #include "soc/soc.h"
-
+#include "soc/rtc.h"
+#include <math.h>
+#include "esp_heap_caps.h"
 /*******************************
 *    warning!!!: any copy of this code or his part must include this: 
 *  "The original was written by Dima Samsonov @ Israel sdima1357@gmail.com on 3/2021" *
@@ -64,10 +66,23 @@ static inline uint32_t _getCycleCount32(void) {
   return ccount;
 }
 
-#define  TRANSMIT_TIME_DELAY (113)
 
-#define  TIME_MULT  25
-#define  TIME_SCALE (512)
+//timing calibrations which depends CPU_FREQ, calibrated in initPins()
+
+int TRANSMIT_TIME_DELAY = 110;  //delay each bit transmit
+int TIME_MULT 		  = 25;    //received time factor delta clocks* TIME_MULT/TIME_SCALE
+int TM_OUT 			  = 64;    //receive time out no activity on bus
+#define  TIME_SCALE (1024)
+
+//#define TEST
+#ifdef TEST
+#define TOUT  1000
+#else
+#define TOUT  (TM_OUT)
+#endif	
+
+
+
 
 #define SET_I     { PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[DP_PIN]); PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[DM_PIN]); GPIO.enable_w1tc = (1 << DP_PIN) | (1 << DM_PIN);  }
 #define SET_O    { GPIO.enable_w1ts = (1 << DP_PIN) | (1 << DM_PIN);  PIN_INPUT_DISABLE(GPIO_PIN_MUX_REG[DP_PIN]); PIN_INPUT_DISABLE(GPIO_PIN_MUX_REG[DM_PIN]);  }
@@ -95,7 +110,12 @@ volatile 	uint8_t received_NRZI_buffer_bytesCnt;
 uint16_t 	received_NRZI_buffer[DEF_BUFF_SIZE];
 
 volatile uint8_t transmit_bits_buffer_store_cnt;
-uint8_t transmit_bits_buffer_store[DEF_BUFF_SIZE];
+
+
+//uint8_t transmit_bits_buffer_store[DEF_BUFF_SIZE];
+// share same memory as received_NRZI_buffer
+uint8_t*  transmit_bits_buffer_store = (uint8_t*)&received_NRZI_buffer[0];
+
 
 volatile uint8_t transmit_NRZI_buffer_cnt;
 uint8_t  transmit_NRZI_buffer[DEF_BUFF_SIZE];
@@ -106,11 +126,67 @@ uint8_t decoded_receive_buffer[DEF_BUFF_SIZE];
 // end temporary used insize lowlevel
 
 
-static inline  void cpuDelay(uint32_t tick)
+
+
+#if 1
+void (*delay_pntA)() =NULL;
+#define cpuDelay(x) {(*delay_pntA)();}
+void setDelay(uint8_t ticks)
+{
+// opcodes of void test_delay() {__asm__ (" nop"); __asm__ (" nop"); __asm__ (" nop"); ...}
+//36 41 00 3d f0 1d f0 00 // one  nop
+//36 41 00 3d f0 3d f0 3d f0 3d f0 3d f0 1d f0 00  // five  nops
+//36 41 00 3d f0 3d f0 3d f0 3d f0 3d f0 3d f0 1d  f0 00 00 00 //
+int    MAX_DELAY_CODE_SIZE = 0x280;
+uint8_t*     pntS;
+	// it can't execute but can read & write
+	if(!delay_pntA)
+	{
+		pntS = malloc(MAX_DELAY_CODE_SIZE);
+	}
+	else
+	{
+		pntS = heap_caps_realloc(delay_pntA, MAX_DELAY_CODE_SIZE, MALLOC_CAP_8BIT);
+	}
+	uint8_t* pnt = (uint8_t*)pntS;
+	//put head of delay procedure
+	*pnt++ = 0x36;
+	*pnt++ = 0x41;
+	*pnt++ = 0; 
+	for(int k=0;k<ticks;k++)
+	{
+		//put NOPs
+		*pnt++ = 0x3d;
+		*pnt++ = 0xf0;
+	}
+	//put tail of delay procedure
+	*pnt++ = 0x1d;
+	*pnt++ = 0xf0;
+	*pnt++ = 0x00;
+	*pnt++ = 0x00;
+	// move it to executable memory segment
+	// it can't  write  but can read & execute
+	delay_pntA = heap_caps_realloc(pntS,MAX_DELAY_CODE_SIZE,MALLOC_CAP_EXEC);
+}
+#else
+void setDelay(uint32_t tick)
+{
+
+}
+inline  void cpuDelayNop(uint32_t ticks)
+{
+	for(int k=0;k<ticks;k++)
+	{
+		__asm__ __volatile__("   nop"); 
+	}
+}
+inline  void cpuDelay(uint32_t tick)
 {
 	uint32_t stop =_getCycleCount32() + tick;
 	while((_getCycleCount32() - stop)&0x80000000u);
 }
+#endif
+
 
 typedef __packed struct
 {
@@ -523,17 +599,13 @@ void sendOnly()
 	restart();
 	SET_I;
 }
-//#define TEST
+#if 0
+// safety  option, but slower and works with high cpu freq >=160MHz .
 void sendRecieveNParse()
 {
 	uint8_t locRec = 0;
 	uint32_t val   = 0xff;//DM_GPIO_Port->IDR&(0x3*DP_Pin);
 	uint32_t nval  = 0xff;
-#ifdef TEST
-#define TOUT  1000
-#else
-#define TOUT  48
-#endif	
 	int32_t act = TOUT;
 //	portDISABLE_INTERRUPTS();
 	sendOnly();
@@ -556,6 +628,36 @@ void sendRecieveNParse()
 //	portENABLE_INTERRUPTS();
 	received_NRZI_buffer_bytesCnt = locRec;
 }
+#else
+// dangerous option, but faster and works with low cpu freq ~80MHz . If we have noise on bus it can overflow received_NRZI_buffer[]
+void sendRecieveNParse()
+		{
+	register uint32_t R3;
+	register uint16_t *STORE = received_NRZI_buffer;
+	//__disable_irq();
+	sendOnly();
+	register uint32_t R4;// = READ_BOTH_PINS;
+
+START:
+	R4 = READ_BOTH_PINS;
+	*STORE = R4 | _getCycleCount8d8();
+	STORE++;
+	R3 = R4;
+	//R4 = READ_BOTH_PINS;
+	//if(R4!=R3)  goto START;
+	if( R3 )
+			{
+		for(int k=0;k<TOUT;k++)
+			{
+			R4   = READ_BOTH_PINS;
+			if(R4!=R3)  goto START;
+			}
+	}
+	//__enable_irq();
+	received_NRZI_buffer_bytesCnt = STORE-received_NRZI_buffer;
+}
+#endif
+
 
 int sendRecieve()
 {
@@ -622,7 +724,7 @@ void pu_Cmd(uint8_t cmd,uint8_t bmRequestType, uint8_t bmRequest,uint16_t wValue
 	repack();
 }
 
-uint8_t ACK_BUFF[0x100];
+uint8_t ACK_BUFF[0x20];
 int    ACK_BUFF_CNT = 0;
 void ACK()
 {
@@ -717,6 +819,7 @@ void timerCallBack()
 #ifdef TEST
 		SOF();
 		sendRecieve();
+		SOF();
 		SOF();
 #else
 		SET_O;
@@ -1076,6 +1179,7 @@ void fsm_Mashine()
 	
 	 if(current->fsm_state == 0)
 	 {
+		current->epCount = 0;
 		current->cb_Cmd     = CB_CHECK;
 		current->fsm_state   = 1;
 	 }
@@ -1155,8 +1259,13 @@ void fsm_Mashine()
 			memcpy(&current->cfg,current->acc_decoded_resp,0x9);
 			current->ufPrintDesc |= 2;
 			Request(T_SETUP,ASSIGNED_USB_ADDRESS,0b0000,T_DATA0,0x80,0x6,0x0200,0x0000,current->cfg.wLength,current->cfg.wLength);
+			current->fsm_state    = 9;
 		}
-		current->fsm_state    = 9; 
+		else
+		{
+			current->fsm_state      = 0;
+			return ;
+		}
 	 }
 	 else if(current->fsm_state==9)
 	 {
@@ -1165,13 +1274,19 @@ void fsm_Mashine()
 			current->ufPrintDesc |= 4;
 			current->descrBufferLen = current->acc_decoded_resp_counter;
 			memcpy(current->descrBuffer,current->acc_decoded_resp,current->descrBufferLen);
-			
+			current->fsm_state    = 97; 
 		}
-		current->fsm_state    = 97; 
+		else
+		{
+			current->cmdTimeOut = 5;
+			current->cb_Cmd       = CB_WAIT1;
+			current->fsm_state    = 7;
+		}
 	 } 
 	 else if(current->fsm_state==97)
 	 {
-		//printf("set (choose) configuration 1\n");
+		// config interfaces??
+		//printf("set configuration 1\n");
 		Request(T_SETUP,ASSIGNED_USB_ADDRESS,0b0000,T_DATA0,0x00,0x9,0x0001,0x0000,0x0000,0x0000);
 		 current->fsm_state    = 98; 
 	 }
@@ -1311,12 +1426,54 @@ int checkPins(int dp,int dm)
 	//p
 	return 1;
 }
+float testDelay6(float freq_MHz)
+{
+	// 6 bits must take 4.0 uSec
+#define SEND_BITS  120
+	float res = 1;
+	transmit_NRZI_buffer_cnt = 0;
+	{
+		for(int k=0;k<SEND_BITS/2;k++)
+		{
+			transmit_NRZI_buffer[transmit_NRZI_buffer_cnt++] = USB_LS_K;
+			transmit_NRZI_buffer[transmit_NRZI_buffer_cnt++] = USB_LS_J;
+		}
+		uint32_t stim = _getCycleCount32();
+		sendOnly();
+		stim =  _getCycleCount32()- stim;
+		res = stim*6.0/freq_MHz/SEND_BITS;
+		printf("%d bits in %f uSec %f MHz  6 ticks in %f uS\n",SEND_BITS,stim/(float)freq_MHz,SEND_BITS*freq_MHz/stim,stim*6.0/freq_MHz/SEND_BITS);
+	}
+	return res; 
+}
+
+uint8_t arr[0x200];
+
 void initStates(int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3)
 {
 	decoded_receive_buffer_head = 0;
 	decoded_receive_buffer_tail = 0;
 	transmit_bits_buffer_store_cnt = 0;
-	
+	//printf("delayProc =%p\n",delayProc);
+	printf("setDelay =%p\n",&setDelay);
+#if 0
+	printf("p0 = %p \n",&p0);
+	printf("de = %p \n",&cpuDelayC);
+	printf("p1 = %p \n",&p1);
+	int len = ((uint32_t)&p1) - ((uint32_t)&cpuDelayC);
+	for(int k=0;k<len;k++)
+	{
+		memcpy(arr,&cpuDelayC,0x200);
+	}
+	printf("\n");
+	for(int k=0;k<len;k++)
+	{
+		if(!(k&0xf)) printf("\n");
+		printf("%02x " ,arr[k]);
+	}
+	printf("\n");
+#endif	
+	int calibrated = 0;
 	for(int k=0;k<NUM_USB;k++)
 	{
 		current = &current_usb[k];
@@ -1363,11 +1520,64 @@ void initStates(int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3)
 			gpio_set_direction(current->DM, GPIO_MODE_INPUT);
 			gpio_pulldown_en(current->DM);
 			current->isValid = 1;
+			
+			// TEST
+			setPins(current->DP,current->DM);
+			
+			if(!calibrated)
+			{	
+				//calibrate delay divide 2
+				int  uTime = 254;
+				int  dTime = 0;
+				
+				rtc_cpu_freq_config_t  out_config;
+				
+				rtc_clk_cpu_freq_get_config(&out_config);
+				
+				//uint32_t freq = rtc_clk_cpu_freq_value(rtc_clk_cpu_freq_get());
+				printf("cpu freq = %d MHz\n",out_config.freq_mhz);
+				
+				TM_OUT = out_config.freq_mhz/2;
+				
+				// 8  - func divided clock to 8, 1.5 - MHz USB LS
+				TIME_MULT = (int)(TIME_SCALE/(out_config.freq_mhz/8/1.5)+0.5);
+				printf("TIME_MULT = %d \n",TIME_MULT);
+				
+				int     TRANSMIT_TIME_DELAY_OPT = 0;
+				TRANSMIT_TIME_DELAY = TRANSMIT_TIME_DELAY_OPT;
+				setDelay(TRANSMIT_TIME_DELAY);
+				float  cS_opt = testDelay6(out_config.freq_mhz);
+#define OPT_TIME (4.00f)
+				for(int p=0;p<9;p++)
+				{
+					TRANSMIT_TIME_DELAY = (uTime+dTime)/2;
+					setDelay(TRANSMIT_TIME_DELAY);
+					float cS = testDelay6(out_config.freq_mhz);
+					if(fabsf(OPT_TIME-cS)<fabsf(OPT_TIME-cS_opt))
+					{
+						cS_opt = cS;
+						TRANSMIT_TIME_DELAY_OPT = TRANSMIT_TIME_DELAY;
+					}
+					if(cS<OPT_TIME)
+					{
+						dTime = TRANSMIT_TIME_DELAY;
+					}
+					else
+					{
+						uTime = TRANSMIT_TIME_DELAY;
+					}
+				}
+				TRANSMIT_TIME_DELAY = TRANSMIT_TIME_DELAY_OPT;
+				setDelay(TRANSMIT_TIME_DELAY);
+				printf("TRANSMIT_TIME_DELAY = %d time = %f error = %f%% \n",TRANSMIT_TIME_DELAY,cS_opt,(cS_opt-OPT_TIME)/OPT_TIME*100);
+				//calibrated = 1;
+			}
 		}
 		else
 		{
 			printf("pins %d %d is Errors !\n",current->DP,current->DM);
 		}
+		
 	}
 }
 
@@ -1500,12 +1710,12 @@ static int cntl = 0;
 								//printf("cfg.bLength         = %02x\n",cfg.bLength);
 								//printf("cfg.bType           = %02x\n",cfg.bType);
 								
-								//~ printf("cfg.wLength         = %02x\n",cfg.wLength);
-								//~ printf("cfg.bNumIntf        = %02x\n",cfg.bNumIntf);
-								//~ printf("cfg.bCV             = %02x\n",cfg.bCV);
-								//~ printf("cfg.bIndex          = %02x\n",cfg.bIndex);
-								//~ printf("cfg.bAttr           = %02x\n",cfg.bAttr);
-								//~ printf("cfg.bMaxPower       = %d\n",cfg.bMaxPower);
+								printf("cfg.wLength         = %02x\n",cfg.wLength);
+								printf("cfg.bNumIntf        = %02x\n",cfg.bNumIntf);
+								printf("cfg.bCV             = %02x\n",cfg.bCV);
+								//printf("cfg.bIndex          = %02x\n",cfg.bIndex);
+								//printf("cfg.bAttr           = %02x\n",cfg.bAttr);
+								printf("cfg.bMaxPower       = %d\n",cfg.bMaxPower);
 
 							}
 							else if (type == 0x4)
