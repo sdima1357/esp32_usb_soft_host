@@ -5,7 +5,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <string.h>
-
+ 
 #include "driver/gpio.h"
 #include "sdkconfig.h"
 #include "driver/timer.h"
@@ -54,17 +54,12 @@
 
 
 ///cpufreq (must be 240) /8 count = 30MHz  convinient number for measure 1.5MHz  of  low speed USB
-static inline uint8_t _getCycleCount8d8(void) {
-  uint32_t ccount;
-  __asm__ __volatile__("rsr %0,ccount":"=a" (ccount));
-  return ccount>>3;
-}
 
-static inline uint32_t _getCycleCount32(void) {
-  uint32_t ccount;
-  __asm__ __volatile__("rsr %0,ccount":"=a" (ccount));
-  return ccount;
-}
+//~ static inline uint32_t _getCycleCount32(void) {
+  //~ uint32_t ccount;
+  //~ __asm__ __volatile__("rsr %0,ccount":"=a" (ccount));
+  //~ return ccount;
+//~ }
 
 
 //timing calibrations which depends CPU_FREQ, calibrated in initPins()
@@ -82,15 +77,46 @@ int TM_OUT 			  = 64;    //receive time out no activity on bus
 #endif	
 
 
+#include "hal/cpu_hal.h"
+#include "hal/gpio_hal.h"
+static inline uint32_t _getCycleCount32()
+{
+	uint32_t ccount = cpu_hal_get_cycle_count();
+	return  ccount;
+}
+static inline uint8_t _getCycleCount8d8(void) 
+{
+  uint32_t ccount = cpu_hal_get_cycle_count();
+  return ccount>>3;
+}
 
 
+#if CONFIG_IDF_TARGET_ESP32
 #define SET_I     { PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[DP_PIN]); PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[DM_PIN]); GPIO.enable_w1tc = (1 << DP_PIN) | (1 << DM_PIN);  }
 #define SET_O    { GPIO.enable_w1ts = (1 << DP_PIN) | (1 << DM_PIN);  PIN_INPUT_DISABLE(GPIO_PIN_MUX_REG[DP_PIN]); PIN_INPUT_DISABLE(GPIO_PIN_MUX_REG[DM_PIN]);  }
 #define SE_J        { *snd[1][0] = (1 << DM_PIN);*snd[1][1] = (1 << DP_PIN); }
 #define SE_0       { *snd[2][0] = (1 << DM_PIN);*snd[2][1] = (1 << DP_PIN); }
 
-//#define READ_BOTH_PINS (((GPIO.in&(0x3*(1<<DP_PIN)))>>(DP_PIN))<<8)
-#define READ_BOTH_PINS ((GPIO.in&RD_MASK)>>RD_SHIFT)
+#define READ_BOTH_PINS (((GPIO.in&RD_MASK)<<8)>>RD_SHIFT)
+uint32_t *   snd[4][2]  = {
+					{&GPIO.out_w1tc,&GPIO.out_w1ts},	
+					{&GPIO.out_w1ts,&GPIO.out_w1tc},	
+					{&GPIO.out_w1tc,&GPIO.out_w1tc},
+					{&GPIO.out_w1tc,&GPIO.out_w1tc}
+				  } ;
+#else
+#define SET_I     { PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[DP_PIN]); PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[DM_PIN]);  gpio_ll_output_disable(&GPIO,DM_PIN); gpio_ll_output_disable(&GPIO,DP_PIN);}
+#define SET_O    { GPIO.enable_w1ts.val = (1 << DP_PIN) | (1 << DM_PIN);  PIN_INPUT_DISABLE(GPIO_PIN_MUX_REG[DP_PIN]); PIN_INPUT_DISABLE(GPIO_PIN_MUX_REG[DM_PIN]);  }
+#define SE_J        { *snd[1][0] = (1 << DM_PIN);*snd[1][1] = (1 << DP_PIN); }
+#define SE_0       { *snd[2][0] = (1 << DM_PIN);*snd[2][1] = (1 << DP_PIN); }
+#define READ_BOTH_PINS (((GPIO.in.val&RD_MASK)<<8)>>RD_SHIFT)
+uint32_t *   snd[4][2]  = {
+					{&GPIO.out_w1tc.val,&GPIO.out_w1ts.val},	
+					{&GPIO.out_w1ts.val,&GPIO.out_w1tc.val},	
+					{&GPIO.out_w1tc.val,&GPIO.out_w1tc.val},
+					{&GPIO.out_w1tc.val,&GPIO.out_w1tc.val}
+				  } ;
+#endif
 
 //must be setup ech time with setPins
 uint32_t DP_PIN;
@@ -131,6 +157,8 @@ uint8_t decoded_receive_buffer[DEF_BUFF_SIZE];
 #if 1
 void (*delay_pntA)() =NULL;
 #define cpuDelay(x) {(*delay_pntA)();}
+
+#if CONFIG_IDF_TARGET_ESP32
 void setDelay(uint8_t ticks)
 {
 // opcodes of void test_delay() {__asm__ (" nop"); __asm__ (" nop"); __asm__ (" nop"); ...}
@@ -167,7 +195,57 @@ uint8_t*     pntS;
 	// move it to executable memory segment
 	// it can't  write  but can read & execute
 	delay_pntA = heap_caps_realloc(pntS,MAX_DELAY_CODE_SIZE,MALLOC_CAP_EXEC);
+	if(!delay_pntA)
+	{
+		printf("Some goind wrong. Disable memory prot !\n delay_pntA = %p\n",delay_pntA);
+		
+	}
 }
+#else
+void setDelay(uint8_t ticks)
+{
+// opcodes of void test_delay() {__asm__ (" nop"); __asm__ (" nop"); __asm__ (" nop"); ...}
+//36 41 00 3d f0 1d f0 00 // one  nop
+//36 41 00 3d f0 3d f0 3d f0 3d f0 3d f0 1d f0 00  // five  nops
+//36 41 00 3d f0 3d f0 3d f0 3d f0 3d f0 3d f0 1d  f0 00 00 00 //
+int    MAX_DELAY_CODE_SIZE = 0x210;
+uint8_t*     pntS;
+	// it can't execute but can read & write
+	if(!delay_pntA)
+	{
+		pntS = heap_caps_aligned_alloc(32,MAX_DELAY_CODE_SIZE, MALLOC_CAP_8BIT);
+		//~ printf("zero pntS = %p\n",pntS);
+	}
+	else
+	{
+		pntS = heap_caps_realloc(delay_pntA, MAX_DELAY_CODE_SIZE, MALLOC_CAP_8BIT);
+		//~ printf("pntS = %p\n",pntS);
+	}
+	uint8_t* pnt = (uint8_t*)pntS;
+	//put head of delay procedure
+	//~ uint8_t* pnt = (uint8_t*)pntS;
+	//put head of delay procedure
+	for(int k=0;k<ticks;k++)
+	{
+		//put NOPs
+		*pnt++ = 0x1;
+		*pnt++ = 0x0;
+	}
+	//put tail of delay procedure
+	*pnt++ = 0x82;
+	*pnt++ = 0x80;
+	// move it to executable memory segment
+	// it can't  write  but can read & execute
+	//delay_pntA = heap_caps_realloc(pntS,MAX_DELAY_CODE_SIZE,MALLOC_CAP_EXEC);
+	//delay_pntA = (void*)dram_alloc_to_iram_addr(pntS,MAX_DELAY_CODE_SIZE);
+	delay_pntA = heap_caps_realloc(pntS,MAX_DELAY_CODE_SIZE,MALLOC_CAP_32BIT | MALLOC_CAP_EXEC);
+	if(!delay_pntA)
+	{
+		printf("idf.py menuconfig\n Component config-> ESP System Setting -> Memory protectiom-> Disable.\n memory prot must be disabled!!!\n delay_pntA = %p\n",delay_pntA);
+		exit(0);
+	}
+}
+#endif
 #else
 void setDelay(uint32_t tick)
 {
@@ -214,6 +292,9 @@ int 			isValid;
 int 			selfNum;
 int                    epCount;	
 int 			cnt;
+uint8_t             flags_new;
+uint8_t             flags;
+	
 uint32_t 		DP;
 uint32_t 		DM;
 volatile enum CallbackCmd   	cb_Cmd;
@@ -242,15 +323,67 @@ int          asckedReceiveBytes;
 int 	       transmitL1Bytes;
 uint8_t    transmitL1[DEF_BUFF_SIZE];
 
-uint8_t   Resp0[DEF_BUFF_SIZE];
-uint8_t   R0Bytes;
-uint8_t   Resp1[DEF_BUFF_SIZE];
-uint8_t   R1Bytes;
+//~ uint8_t   Resp0[DEF_BUFF_SIZE];
+//~ uint8_t   R0Bytes;
+//~ uint8_t   Resp1[DEF_BUFF_SIZE];
+//~ uint8_t   R1Bytes;
 
 } sUsbContStruct;
 
 sUsbContStruct * current;
 
+void parseImmed(sUsbContStruct * pcurrent)
+{
+static sCfgDesc  	cfg;
+static sIntfDesc 		sIntf;
+static HIDDescriptor 	hid[4];
+static sEPDesc 		epd;
+static int 			cfgCount   = 0;
+static int 			sIntfCount   = 0;
+static int 			hidCount   = 0;
+
+int 			pos = 0;
+#define STDCLASS        0x00
+#define HIDCLASS        0x03
+#define HUBCLASS	 	0x09      /* bDeviceClass, bInterfaceClass */
+pcurrent->epCount     = 0;
+while(pos<pcurrent->descrBufferLen-2)
+	
+	{
+		uint8_t len  =  pcurrent->descrBuffer[pos];
+		uint8_t type =  pcurrent->descrBuffer[pos+1];
+		if(len==0)
+		{
+			//printf("pos = %02x type = %02x cfg.wLength = %02x pcurrent->acc_decoded_resp_counter = %02x\n ",pos,type,cfg.wLength,pcurrent->acc_decoded_resp_counter);
+			pos = pcurrent->descrBufferLen;
+		}
+		if(pos+len<=pcurrent->descrBufferLen)
+		{
+				if(type == 0x2)
+				{
+					memcpy(&cfg,&pcurrent->descrBuffer[pos],len);
+					
+				}
+				else if (type == 0x4)
+				{
+					memcpy(&sIntf,&pcurrent->descrBuffer[pos],len);
+				}
+				else if (type == 0x21)
+				{
+
+					hidCount++;
+					int i = hidCount-1;
+					memcpy(&hid[i],&pcurrent->descrBuffer[pos],len);
+				}
+				else if (type == 0x5)
+				{
+					pcurrent->epCount++;
+					memcpy(&epd,&pcurrent->descrBuffer[pos],len);
+				}
+		}
+		pos+=len;
+	}
+}
 
 
 
@@ -264,12 +397,6 @@ sUsbContStruct * current;
 
 
 
-uint32_t *   snd[4][2]  = {
-					{&GPIO.out_w1tc,&GPIO.out_w1ts},	
-					{&GPIO.out_w1ts,&GPIO.out_w1tc},	
-					{&GPIO.out_w1tc,&GPIO.out_w1tc},
-					{&GPIO.out_w1tc,&GPIO.out_w1tc}
-				  } ;
 
 				  
 #ifdef WR_SIMULTA	
@@ -877,7 +1004,23 @@ void timerCallBack()
 		 pu_Addr(T_IN,current->rq.addr,current->rq.eop);
 				//setup
 		 sendRecieveNParse();
-		 ACK();
+		 if(received_NRZI_buffer_bytesCnt<SMALL_NO_DATA &&  received_NRZI_buffer_bytesCnt >SMALL_NO_DATA/4)
+		 {	 
+			ACK();
+		 }
+		 else
+		 {
+			current->numb_reps_errors_allowed--;
+			if(current->numb_reps_errors_allowed>0)
+			 {
+					 return ;
+			 }
+			 else
+			 {
+				 
+			 }
+			 
+		 }
 		current->cb_Cmd=CB_TICK;
 		 current->bComplete = 1;
 	}
@@ -1274,6 +1417,7 @@ void fsm_Mashine()
 			current->ufPrintDesc |= 4;
 			current->descrBufferLen = current->acc_decoded_resp_counter;
 			memcpy(current->descrBuffer,current->acc_decoded_resp,current->descrBufferLen);
+			parseImmed(current);
 			current->fsm_state    = 97; 
 		}
 		else
@@ -1302,10 +1446,14 @@ void fsm_Mashine()
 		//current->cnt++;
 		//uint8_t cmd1 = current->cnt&0x20?0x7:0x0;
 		 //printf(" 3 LEDs enable/disable on keyboard \n");
-		uint8_t cmd1 = 0;
+		 if(current->flags_new!=current->flags)
+		 {
+			current->flags = current->flags_new;
+			RequestSend(T_SETUP,ASSIGNED_USB_ADDRESS,0b0000,T_DATA0,0x21,0x9,0x0200,0x0000,0x0001,0x0001,&current->flags);
+		 }
 		//if(cmd0!=cmd1)
 		//{
-			RequestSend(T_SETUP,ASSIGNED_USB_ADDRESS,0b0000,T_DATA0,0x21,0x9,0x0200,0x0000,0x0001,0x0001,&cmd1);
+			
 		//}
 		//else
 		//{
@@ -1324,9 +1472,10 @@ void fsm_Mashine()
 	 {
 		 if(current->acc_decoded_resp_counter>=1)
 		 {
-			current->ufPrintDesc |= 8;
-			current->R0Bytes= current->acc_decoded_resp_counter;
-			memcpy(current->Resp0,current->acc_decoded_resp,current->R0Bytes);	 
+			usbMess(current->selfNum*4+0,current->acc_decoded_resp_counter,current->acc_decoded_resp);
+			// current->ufPrintDesc |= 8;
+			//~ current->R0Bytes= current->acc_decoded_resp_counter;
+			//~ memcpy(current->Resp0,current->acc_decoded_resp,current->R0Bytes);	 
 			
 			led(1);
 			//gpio_set_level(B23_GPIO, 1);
@@ -1349,9 +1498,11 @@ void fsm_Mashine()
 	 {
 		 if(current->acc_decoded_resp_counter>=1)
 		 {
-			current->ufPrintDesc |= 16;
-			current->R1Bytes= current->acc_decoded_resp_counter;
-			memcpy(current->Resp1,current->acc_decoded_resp,current->R0Bytes);	 
+			 usbMess(current->selfNum*4+1,current->acc_decoded_resp_counter,current->acc_decoded_resp);
+			//current->ufPrintDesc |= 16;
+			//current->R1Bytes= current->acc_decoded_resp_counter;
+			//memcpy(current->Resp1,current->acc_decoded_resp,current->R0Bytes);	 
+			led(1);
 		 }
 		current->cmdTimeOut = 2; 
 		current->cb_Cmd        = CB_WAIT1;
@@ -1372,7 +1523,7 @@ void fsm_Mashine()
 			current->fsm_state      = 0; 
 			return ;
 		}
-		current->fsm_state      = 100; 
+		current->fsm_state      = 99; 
 	 }
 	 else
 	 {
@@ -1398,19 +1549,10 @@ void setPins(int DPPin,int DMPin)
 	DM_PIN_M   = (1 << DMPin);
 	DP_PIN_M    = (1 << DPPin);
 	RD_MASK    = (1<<DPPin)|(1<<DMPin);
-	int DIFF = MIN_PIN-8;
-	if(DIFF>=0)
-	{
-		RD_SHIFT = DIFF;
-		M_ONE = 1<<(DM_PIN-MIN_PIN);//<<DIFF;
-		P_ONE = 1<<(DP_PIN-MIN_PIN);//<<DIFF;
-	}
-	else
-	{
-		RD_SHIFT = -DIFF;
-		M_ONE = 2;
-		P_ONE = 1;
-	}
+	
+	RD_SHIFT = MIN_PIN;
+	M_ONE = 1<<(DM_PIN-MIN_PIN);
+	P_ONE = 1<<(DP_PIN-MIN_PIN);
 }
 
 sUsbContStruct  current_usb[NUM_USB];
@@ -1421,15 +1563,16 @@ int checkPins(int dp,int dm)
 	{
 		return 0;
 	}
-	if( dp<8 || dp>31) return 0;
-	if( dm<8 || dm>31) return 0;
-	//p
 	return 1;
 }
+
+int64_t get_system_time_us();
+
 float testDelay6(float freq_MHz)
 {
 	// 6 bits must take 4.0 uSec
 #define SEND_BITS  120
+#define REPS           40
 	float res = 1;
 	transmit_NRZI_buffer_cnt = 0;
 	{
@@ -1438,16 +1581,21 @@ float testDelay6(float freq_MHz)
 			transmit_NRZI_buffer[transmit_NRZI_buffer_cnt++] = USB_LS_K;
 			transmit_NRZI_buffer[transmit_NRZI_buffer_cnt++] = USB_LS_J;
 		}
-		uint32_t stim = _getCycleCount32();
-		sendOnly();
-		stim =  _getCycleCount32()- stim;
-		res = stim*6.0/freq_MHz/SEND_BITS;
-		printf("%d bits in %f uSec %f MHz  6 ticks in %f uS\n",SEND_BITS,stim/(float)freq_MHz,SEND_BITS*freq_MHz/stim,stim*6.0/freq_MHz/SEND_BITS);
+		int64_t stimb = get_system_time_us();
+		for(int k=0;k<REPS;k++)
+		{
+			sendOnly();
+			transmit_NRZI_buffer_cnt = SEND_BITS;
+		}
+		
+		uint32_t stim =  get_system_time_us()- stimb;
+		freq_MHz = 1.0f;
+		res = stim*6.0/freq_MHz/(SEND_BITS*REPS);
+		printf("%d bits in %f uSec %f MHz  6 ticks in %f uS\n",(SEND_BITS*REPS),stim/(float)freq_MHz,(SEND_BITS*REPS)*freq_MHz/stim,stim*6.0/freq_MHz/(SEND_BITS*REPS));
 	}
 	return res; 
 }
 
-uint8_t arr[0x200];
 
 void initStates(int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3)
 {
@@ -1456,23 +1604,6 @@ void initStates(int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3)
 	transmit_bits_buffer_store_cnt = 0;
 	//printf("delayProc =%p\n",delayProc);
 	printf("setDelay =%p\n",&setDelay);
-#if 0
-	printf("p0 = %p \n",&p0);
-	printf("de = %p \n",&cpuDelayC);
-	printf("p1 = %p \n",&p1);
-	int len = ((uint32_t)&p1) - ((uint32_t)&cpuDelayC);
-	for(int k=0;k<len;k++)
-	{
-		memcpy(arr,&cpuDelayC,0x200);
-	}
-	printf("\n");
-	for(int k=0;k<len;k++)
-	{
-		if(!(k&0xf)) printf("\n");
-		printf("%02x " ,arr[k]);
-	}
-	printf("\n");
-#endif	
 	int calibrated = 0;
 	for(int k=0;k<NUM_USB;k++)
 	{
@@ -1502,6 +1633,8 @@ void initStates(int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3)
 		{
 			printf("pins %d %d is OK!\n",current->DP,current->DM);
 			current->selfNum = k;
+			current->flags_new  = 0x0;
+			current->flags 		= 0x0;
 			current->in_data_flip_flop       = 0;
 			current->bComplete  = 1;
 			current->cmdTimeOut = 0;
@@ -1513,21 +1646,37 @@ void initStates(int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3)
 			current->counterAck = 0;
 			current->epCount = 0;
 			gpio_pad_select_gpio(current->DP);
+			gpio_set_direction(current->DP, GPIO_MODE_OUTPUT);
+			gpio_set_level(current->DP, 0);
 			gpio_set_direction(current->DP, GPIO_MODE_INPUT);
 			gpio_pulldown_en(current->DP);
 			
 			gpio_pad_select_gpio(current->DM);
+			gpio_set_direction(current->DM, GPIO_MODE_OUTPUT);
+			gpio_set_level(current->DM, 0);
 			gpio_set_direction(current->DM, GPIO_MODE_INPUT);
 			gpio_pulldown_en(current->DM);
 			current->isValid = 1;
 			
 			// TEST
 			setPins(current->DP,current->DM);
-			
+			printf("READ_BOTH_PINS = %04x\n",READ_BOTH_PINS);
+			SET_O;
+			SE_0;
+			SE_J;
+			SE_0;
+			SET_I;
+			printf("READ_BOTH_PINS = %04x\n",READ_BOTH_PINS);
+			gpio_set_direction(current->DP, GPIO_MODE_OUTPUT);
+			gpio_set_direction(current->DM, GPIO_MODE_OUTPUT);
+			printf("READ_BOTH_PINS = %04x\n",READ_BOTH_PINS);
+			SET_I;
+			printf("READ_BOTH_PINS = %04x\n",READ_BOTH_PINS);
 			if(!calibrated)
 			{	
 				//calibrate delay divide 2
-				int  uTime = 254;
+#define DELAY_CORR 2
+				int  uTime = 255-DELAY_CORR;
 				int  dTime = 0;
 				
 				rtc_cpu_freq_config_t  out_config;
@@ -1545,12 +1694,14 @@ void initStates(int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3)
 				
 				int     TRANSMIT_TIME_DELAY_OPT = 0;
 				TRANSMIT_TIME_DELAY = TRANSMIT_TIME_DELAY_OPT;
+				printf("D=%4d ",TRANSMIT_TIME_DELAY);
 				setDelay(TRANSMIT_TIME_DELAY);
 				float  cS_opt = testDelay6(out_config.freq_mhz);
 #define OPT_TIME (4.00f)
 				for(int p=0;p<9;p++)
 				{
 					TRANSMIT_TIME_DELAY = (uTime+dTime)/2;
+					printf("D=%4d ",TRANSMIT_TIME_DELAY);
 					setDelay(TRANSMIT_TIME_DELAY);
 					float cS = testDelay6(out_config.freq_mhz);
 					if(fabsf(OPT_TIME-cS)<fabsf(OPT_TIME-cS_opt))
@@ -1567,7 +1718,11 @@ void initStates(int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3)
 						uTime = TRANSMIT_TIME_DELAY;
 					}
 				}
-				TRANSMIT_TIME_DELAY = TRANSMIT_TIME_DELAY_OPT;
+				//TRANSMIT_TIME_DELAY_OPT = 100;
+				// 80MHz cpu measure corr. Add anyway for all cpu freq
+				
+				TRANSMIT_TIME_DELAY = TRANSMIT_TIME_DELAY_OPT+DELAY_CORR; 
+				//printf("D=%03d ",TRANSMIT_TIME_DELAY);
 				setDelay(TRANSMIT_TIME_DELAY);
 				printf("TRANSMIT_TIME_DELAY = %d time = %f error = %f%% \n",TRANSMIT_TIME_DELAY,cS_opt,(cS_opt-OPT_TIME)/OPT_TIME*100);
 				//calibrated = 1;
@@ -1580,9 +1735,26 @@ void initStates(int DP0,int DM0,int DP1,int DM1,int DP2,int DM2,int DP3,int DM3)
 		
 	}
 }
-
+void usbSetFlags(int _usb_num,uint8_t flags)
+{
+	if(_usb_num<NUM_USB&&_usb_num>=0)
+	{
+		current_usb[_usb_num].flags_new =  flags;
+	}
+}
+uint8_t usbGetFlags(int _usb_num)
+{
+	if(_usb_num<NUM_USB&&_usb_num>=0)
+	{
+		return current_usb[_usb_num].flags;
+	}
+	return  0;
+}
 void usb_process()
 {
+#if CONFIG_IDF_TARGET_ESP32C3
+	cpu_ll_enable_cycle_count();
+#endif	
 	for(int k=0;k<NUM_USB;k++)
 	{
 		current = &current_usb[k];
@@ -1590,6 +1762,7 @@ void usb_process()
 		{
 			setPins(current->DP,current->DM);
 			timerCallBack();
+			
 			fsm_Mashine();
 		}
 	}
@@ -1602,7 +1775,7 @@ static int cntl = 0;
 	         int ref = cntl%NUM_USB;
 		sUsbContStruct * pcurrent = &current_usb[ref];
 		if(!pcurrent->isValid) return ;
-		if((cntl%200)<NUM_USB)
+		if((cntl%800)<NUM_USB)
 		{
 			printf("USB%d: Ack = %d Nack = %d %02x pcurrent->cb_Cmd = %d  state = %d epCount = %d",cntl%NUM_USB,pcurrent->counterAck,pcurrent->counterNAck,pcurrent->wires_last_state,pcurrent->cb_Cmd,pcurrent->fsm_state,pcurrent->epCount);
 #ifdef DEBUG_ALL
@@ -1653,26 +1826,26 @@ static int cntl = 0;
 			//~ printf("cfg.bAttr           = %02x\n",cfg.bAttr);
 			//~ printf("cfg.bMaxPower       = %d\n",cfg.bMaxPower);
 		}
-		if(pcurrent->ufPrintDesc&8)
-		{
-			pcurrent->ufPrintDesc &= ~(uint32_t)8;
-			printf("in0 :");
-			for(int k=0;k<pcurrent->R0Bytes;k++)
-			{
-				printf("%02x ",pcurrent->Resp0[k]);
-			}
-			printf("\n");
-		}
-		if(pcurrent->ufPrintDesc&16)
-		{
-			pcurrent->ufPrintDesc &= ~(uint32_t)16;
-			printf("in1 :");
-			for(int k=0;k<pcurrent->R1Bytes;k++)
-			{
-				printf("%02x ",pcurrent->Resp1[k]);
-			}
-			printf("\n");
-		}
+		//~ if(pcurrent->ufPrintDesc&8)
+		//~ {
+			//~ pcurrent->ufPrintDesc &= ~(uint32_t)8;
+			//~ printf("in0 :");
+			//~ for(int k=0;k<pcurrent->R0Bytes;k++)
+			//~ {
+				//~ printf("%02x ",pcurrent->Resp0[k]);
+			//~ }
+			//~ printf("\n");
+		//~ }
+		//~ if(pcurrent->ufPrintDesc&16)
+		//~ {
+			//~ pcurrent->ufPrintDesc &= ~(uint32_t)16;
+			//~ printf("in1 :");
+			//~ for(int k=0;k<pcurrent->R1Bytes;k++)
+			//~ {
+				//~ printf("%02x ",pcurrent->Resp1[k]);
+			//~ }
+			//~ printf("\n");
+		//~ }
 		
 		if(pcurrent->ufPrintDesc&4)
 		{
@@ -1690,7 +1863,7 @@ static int cntl = 0;
 			#define HIDCLASS        0x03
 			#define HUBCLASS	 	0x09      /* bDeviceClass, bInterfaceClass */
 			printf("clear epCount %d self = %d\n",pcurrent->epCount,pcurrent->selfNum);
-			pcurrent->epCount     = 0;
+			//pcurrent->epCount     = 0;
 				while(pos<pcurrent->descrBufferLen-2)
 				{
 					uint8_t len  =  pcurrent->descrBuffer[pos];
@@ -1750,7 +1923,7 @@ static int cntl = 0;
 							}
 							else if (type == 0x5)
 							{
-								pcurrent->epCount++;
+								//pcurrent->epCount++;
 								printf("pcurrent->epCount = %d\n",pcurrent->epCount);
 								sEPDesc epd;
 								memcpy(&epd,&pcurrent->descrBuffer[pos],len);
