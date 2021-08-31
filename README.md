@@ -21,7 +21,9 @@ usb connectors(for example): https://www.aliexpress.com/item/1005002027124387.ht
 
 >cd esp32_usb_soft_host/usb_test/
 
->make flash monitor
+> idf.py set-target esp32
+
+> idf.py flash monitor
 
 
 Test run with 3 mouses, $3 CY7C68013A logic analyser  and amazing program https://sigrok.org/wiki/PulseView :
