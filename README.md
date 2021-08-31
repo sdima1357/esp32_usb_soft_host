@@ -28,4 +28,6 @@ Test run with 3 mouses, $3 CY7C68013A logic analyser  and amazing program https:
 
 ![image2](https://github.com/sdima1357/esp32_usb_soft_host/blob/main/images/PulseView.jpg?raw=true)
 
+>Tue Aug 31 15:50:48 IDT 2021
+
 Add esp32c3 support. (idf.py set-target esp32c3 ; idf.py menuconfig\n Component config-> ESP System Setting -> Memory protectiom-> Disable.)
