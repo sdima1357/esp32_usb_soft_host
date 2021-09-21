@@ -36,13 +36,19 @@ Test run with 3 mouses, $3 CY7C68013A logic analyser  and amazing program https:
 
 >Tue Aug 31 15:50:48 IDT 2021
 
-Add esp32c3 support. (idf.py set-target esp32c3 ; idf.py menuconfig\n 
+Add esp32c3 support. 
+
+>idf.py set-target esp32c3 
+
+>idf.py menuconfig
 
 set in: 
 
 Menuconfig->compiler options -> optimization level> O2
 
 Component config-> ESP System Setting -> Memory protection-> Disable.)
+
+> idf.py flash monitor
 
 Warning(disclaimer):
 Sorry, but target of this project right now - only research & proof of feasibility. I can't debug hardware which i don't have. Some hardware(devices) may not work, from different reasons. In the case of problem i suggest to check wires &  use $3 CY7C68013A logic analyser. Sometimes i can help.
