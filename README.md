@@ -23,9 +23,12 @@ usb connectors(for example): https://www.aliexpress.com/item/1005002027124387.ht
 
 > idf.py set-target esp32
 
+> idf.py menuconfig
+
+**Please check if Menuconfig->compiler options -> optimization level> O2 ( must be in O2 options. idf.py set-target esp32 resets it to Og ,I don't know why)**
+
 > idf.py flash monitor
 
-**Please check if Menuconfig->compiler options -> optimization level> O2 ( must be in O2 options. Somethimes it resets to Og ,I don't know why)**
 
 Test run with 3 mouses, $3 CY7C68013A logic analyser  and amazing program https://sigrok.org/wiki/PulseView :
 
