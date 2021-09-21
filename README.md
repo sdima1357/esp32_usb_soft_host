@@ -25,7 +25,7 @@ usb connectors(for example): https://www.aliexpress.com/item/1005002027124387.ht
 
 > idf.py flash monitor
 
-**Please check In Menuconfig->compiler options -> optimization level> set to O2 options. Somethimes it resets to Og (I don't know why)**
+**Please check if Menuconfig->compiler options -> optimization level> O2 ( must be set to O2 options. Somethimes it resets to Og ,I don't know why)**
 
 Test run with 3 mouses, $3 CY7C68013A logic analyser  and amazing program https://sigrok.org/wiki/PulseView :
 
