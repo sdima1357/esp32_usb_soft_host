@@ -46,8 +46,7 @@ set in:
 
 Menuconfig->compiler options -> optimization level> O2
 
-**only for esp32c3**
-**Component config-> ESP System Setting -> Memory protection-> Disable.**
+**only for esp32c3: Component config-> ESP System Setting -> Memory protection-> Disable.**
 
 > idf.py flash monitor
 
