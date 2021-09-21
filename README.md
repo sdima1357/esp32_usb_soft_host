@@ -25,7 +25,7 @@ usb connectors(for example): https://www.aliexpress.com/item/1005002027124387.ht
 
 > idf.py menuconfig
 
-**Please check if Menuconfig->compiler options -> optimization level> O2 ( must be in O2 options. idf.py set-target esp32 resets it to Og ,I don't know why)**
+**Please set in Menuconfig->compiler options -> optimization level> O2 ( must be in O2 options. idf.py set-target esp32 resets it to Og ,I don't know why)**
 
 > idf.py flash monitor
 
