@@ -50,5 +50,7 @@ Menuconfig->compiler options -> optimization level> O2
 
 > idf.py flash monitor
 
-Warning(disclaimer):
-Sorry, but target of this project right now - only research & proof of feasibility. I can't debug hardware which i don't have. Some hardware(devices) may not work, from different reasons. In the case of problem i suggest to check wires &  use $3 CY7C68013A logic analyser. Sometimes i can help.
+
+
+**Warning(disclaimer):
+Sorry, but target of this project right now - only research & proof of feasibility. I can't debug hardware which i don't have. Some hardware(devices) may not work, from different reasons. In the case of problem i suggest to check wires &  use $3 CY7C68013A logic analyser. Sometimes i can help.**
