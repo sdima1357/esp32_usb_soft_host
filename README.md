@@ -46,7 +46,7 @@ set in:
 
 Menuconfig->compiler options -> optimization level> O2
 
-Component config-> ESP System Setting -> Memory protection-> Disable.)
+Component config-> ESP System Setting -> Memory protection-> Disable.
 
 > idf.py flash monitor
 
