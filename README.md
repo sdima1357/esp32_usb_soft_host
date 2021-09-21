@@ -41,6 +41,7 @@ Add esp32c3 support. (idf.py set-target esp32c3 ; idf.py menuconfig\n
 set in: 
 
 Menuconfig->compiler options -> optimization level> O2
+
 Component config-> ESP System Setting -> Memory protection-> Disable.)
 
 Warning(disclaimer):
